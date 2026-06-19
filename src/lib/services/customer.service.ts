@@ -1,11 +1,23 @@
 import axios from 'axios';
 
-const proxy = '/api/proxy';
+export const getCustomers = async () => {
+  const res = await axios.get("/api/proxy/customers");
 
-export const getCustomers = (params?: any) => {
-  return axios.get(`${proxy}/customers`, { params });
+  console.log("RAW API RESPONSE:", res.data);
+
+  return res.data;
 };
 
-export const createCustomer = (data: any) => {
-  return axios.post(`${proxy}/customers`, data);
+export const createCustomer = async (data: any) => {
+  try {
+    const response = await axios.post('/api/proxy/customers', data, {
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    });
+    return response;
+  } catch (error: any) {
+    console.error('Error creating customer:', error.response?.data || error.message);
+    throw error;
+  }
 };

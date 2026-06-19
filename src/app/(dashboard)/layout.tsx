@@ -1,8 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { useState } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 const queryClient = new QueryClient();
@@ -13,22 +12,32 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const router = useRouter();
 
   const navItems = [
-    { href: '/dashboard', label: 'Dashboard' },
-    { href: '/pos', label: 'POS' },
-    { href: '/items', label: 'Items' },
-    { href: '/customers', label: 'Customers' },
+    { href: '/dashboard', label: '📊 Dashboard' },
+    { href: '/pos', label: '🛒 POS' },
+    { href: '/items', label: '📦 Items' },
+    { href: '/customers', label: '👥 Customers' },
   ];
+
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/proxy/logout');
+      window.location.href = '/login';
+    } catch (error) {
+      console.error('Logout error:', error);
+      window.location.href = '/login';
+    }
+  };
 
   return (
     <QueryClientProvider client={queryClient}>
       <div className="min-h-screen bg-gray-100 flex">
         {/* Sidebar */}
-        <aside className={`bg-gray-800 text-white w-64 space-y-6 py-7 px-2 ${sidebarOpen ? 'block' : 'hidden'} md:block`}>
-          <div className="text-2xl font-semibold text-center">POS App</div>
-          <nav>
+        <aside className="bg-gray-800 text-white w-64 space-y-6 py-7 px-2 flex flex-col">
+          <div className="text-2xl font-semibold text-center">🛒 POS</div>
+          <nav className="flex-1">
             {navItems.map((item) => (
               <Link
                 key={item.href}
@@ -41,23 +50,16 @@ export default function DashboardLayout({
               </Link>
             ))}
           </nav>
-          <div className="absolute bottom-4 w-56">
-            <Link
-              href="/api/proxy/logout"
-              className="block py-2.5 px-4 rounded hover:bg-gray-700"
-              onClick={async (e) => {
-                e.preventDefault();
-                await fetch('/api/proxy/logout');
-                window.location.href = '/login';
-              }}
-            >
-              Logout
-            </Link>
-          </div>
+          <button
+            onClick={handleLogout}
+            className="block w-full text-left py-2.5 px-4 rounded hover:bg-gray-700 transition duration-200 text-red-400 hover:text-red-300"
+          >
+            🚪 Logout
+          </button>
         </aside>
 
         {/* Main content */}
-        <main className="flex-1 p-4 md:p-6 overflow-y-auto">
+        <main className="flex-1 overflow-y-auto">
           {children}
         </main>
       </div>
