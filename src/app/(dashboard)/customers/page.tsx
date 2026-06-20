@@ -78,7 +78,7 @@ export default function CustomersPage() {
       }
       
       const customersData = await customersResponse.json();
-      const customersList = customersData.data || [];
+      const customersList: Customer[] = customersData.data || [];
       console.log('Customers loaded:', customersList.length);
       
       // Fetch customer wallets
@@ -100,7 +100,7 @@ export default function CustomersPage() {
       
       // Create wallet map with case-insensitive matching
       const walletMap = new Map<string, CustomerWallet>();
-      walletsList.forEach((wallet) => {
+      walletsList.forEach((wallet: CustomerWallet) => {
         if (wallet.customer) {
           walletMap.set(wallet.customer, wallet);
           walletMap.set(wallet.customer.toLowerCase(), wallet);
@@ -108,7 +108,7 @@ export default function CustomersPage() {
       });
       
       // Merge customers with wallets
-      const mergedCustomers = customersList.map((customer: Customer) => {
+      const mergedCustomers: CustomerWithWallet[] = customersList.map((customer: Customer) => {
         let wallet = walletMap.get(customer.name) || walletMap.get(customer.name?.toLowerCase() || '');
         
         if (!wallet && customer.customer_name) {
@@ -122,7 +122,9 @@ export default function CustomersPage() {
       });
       
       setCustomers(mergedCustomers);
-      setDebugInfo(`Customers: ${customersList.length}, Wallets: ${walletsList.length}, Merged: ${mergedCustomers.filter(c => c.wallet).length} with wallets`);
+      
+      // FIXED: Added explicit type for the filter parameter
+      setDebugInfo(`Customers: ${customersList.length}, Wallets: ${walletsList.length}, Merged: ${mergedCustomers.filter((c: CustomerWithWallet) => c.wallet).length} with wallets`);
       
     } catch (err: any) {
       console.error("Error loading data:", err);
@@ -132,59 +134,12 @@ export default function CustomersPage() {
     }
   };
 
-  // Helper function to check if card UID is already assigned to another customer
-  const isCardAlreadyAssigned = (cardUid: string, excludeCustomerName?: string): boolean => {
-    if (!cardUid || cardUid.trim() === '') return false;
-    
-    const trimmedCardUid = cardUid.trim();
-    
-    // Check if any customer (except the current one) has this card UID
-    return customers.some(customer => {
-      // Skip the current customer if updating
-      if (excludeCustomerName && customer.name === excludeCustomerName) {
-        return false;
-      }
-      
-      const customerCardUid = customer.wallet?.card_uid;
-      if (!customerCardUid || customerCardUid.trim() === '' || customerCardUid === 'null') {
-        return false;
-      }
-      
-      return customerCardUid.trim() === trimmedCardUid;
-    });
-  };
-
-  // Get customer who has this card assigned
-  const getCustomerWithCard = (cardUid: string): CustomerWithWallet | null => {
-    if (!cardUid || cardUid.trim() === '') return null;
-    
-    const trimmedCardUid = cardUid.trim();
-    
-    return customers.find(customer => {
-      const customerCardUid = customer.wallet?.card_uid;
-      if (!customerCardUid || customerCardUid.trim() === '' || customerCardUid === 'null') {
-        return false;
-      }
-      return customerCardUid.trim() === trimmedCardUid;
-    }) || null;
-  };
-
   const handleCreateCustomer = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
     setError(null);
     
     try {
-      // Check if card UID is already assigned to someone else
-      if (formData.card_uid && formData.card_uid.trim() !== '') {
-        const existingCustomer = getCustomerWithCard(formData.card_uid);
-        if (existingCustomer) {
-          alert(`❌ Card UID "${formData.card_uid}" is already assigned to customer: ${existingCustomer.customer_name || existingCustomer.name}`);
-          setSubmitting(false);
-          return;
-        }
-      }
-      
       // Create customer
       const response = await fetch('/api/proxy/customers', {
         method: 'POST',
@@ -256,7 +211,6 @@ export default function CustomersPage() {
           }
         } catch (cardError) {
           console.error('Error assigning card:', cardError);
-          // Don't fail the customer creation if card assignment fails
         }
       }
       
@@ -334,7 +288,6 @@ export default function CustomersPage() {
         }),
       });
       
-      // Check if response is ok before parsing JSON
       if (!updateResponse.ok) {
         const errorText = await updateResponse.text();
         console.error('Update wallet error:', errorText);
@@ -370,6 +323,21 @@ export default function CustomersPage() {
     }
   };
 
+  // Helper function to check if card UID is already assigned to another customer
+  const getCustomerWithCard = (cardUid: string): CustomerWithWallet | null => {
+    if (!cardUid || cardUid.trim() === '') return null;
+    
+    const trimmedCardUid = cardUid.trim();
+    
+    return customers.find((customer: CustomerWithWallet) => {
+      const customerCardUid = customer.wallet?.card_uid;
+      if (!customerCardUid || customerCardUid.trim() === '' || customerCardUid === 'null') {
+        return false;
+      }
+      return customerCardUid.trim() === trimmedCardUid;
+    }) || null;
+  };
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     setFormData({
       ...formData,
@@ -383,15 +351,6 @@ export default function CustomersPage() {
       ...assignData,
       [e.target.name]: newCardUid
     });
-    
-    // Real-time validation: check if the entered card is already assigned
-    if (newCardUid.trim() !== '' && selectedCustomer) {
-      const existingCustomer = getCustomerWithCard(newCardUid);
-      if (existingCustomer && existingCustomer.name !== selectedCustomer.name) {
-        // Show warning but don't block input
-        console.warn(`Card "${newCardUid}" is already assigned to ${existingCustomer.customer_name || existingCustomer.name}`);
-      }
-    }
   };
 
   const handleNFCClick = (type: 'create' | 'assign') => {
@@ -399,14 +358,12 @@ export default function CustomersPage() {
       const uid = prompt('Web NFC is not supported. Enter Card UID manually:');
       if (uid?.trim()) {
         if (type === 'create') {
-          // Check if card is already assigned
           const existingCustomer = getCustomerWithCard(uid);
           if (existingCustomer) {
             alert(`⚠️ Card UID "${uid}" is already assigned to: ${existingCustomer.customer_name || existingCustomer.name}`);
           }
           setFormData(prev => ({ ...prev, card_uid: uid.trim() }));
         } else {
-          // Check if card is already assigned (excluding current customer)
           if (selectedCustomer) {
             const existingCustomer = getCustomerWithCard(uid);
             if (existingCustomer && existingCustomer.name !== selectedCustomer.name) {
@@ -439,12 +396,10 @@ export default function CustomersPage() {
             if (uid) {
               setIsScanning(false);
               
-              // Check if card is already assigned
               if (type === 'create') {
                 const existingCustomer = getCustomerWithCard(uid);
                 if (existingCustomer) {
                   alert(`⚠️ Card UID "${uid}" is already assigned to: ${existingCustomer.customer_name || existingCustomer.name}`);
-                  // Still allow the user to use it if they want (they can override by typing manually)
                 }
                 setFormData(prev => ({ ...prev, card_uid: uid }));
               } else {
@@ -534,7 +489,7 @@ export default function CustomersPage() {
     }
   };
 
-  const filteredCustomers = customers.filter(customer => {
+  const filteredCustomers = customers.filter((customer: CustomerWithWallet) => {
     const search = searchTerm.toLowerCase();
     const name = customer.customer_name || customer.name || '';
     const email = customer.email_id || '';
@@ -553,10 +508,10 @@ export default function CustomersPage() {
 
   // Calculate stats
   const totalCustomers = customers.length;
-  const customersWithCard = customers.filter(c => c.wallet?.card_uid && c.wallet.card_uid.trim() !== '' && c.wallet.card_uid !== 'null').length;
-  const totalWalletBalance = customers.reduce((sum, c) => sum + (c.wallet?.wallet_balance || 0), 0);
-  const activeWallets = customers.filter(c => c.wallet?.status === 'Active').length;
-  const customersWithoutCard = customers.filter(c => !c.wallet?.card_uid || c.wallet.card_uid.trim() === '' || c.wallet.card_uid === 'null');
+  const customersWithCard = customers.filter((c: CustomerWithWallet) => c.wallet?.card_uid && c.wallet.card_uid.trim() !== '' && c.wallet.card_uid !== 'null').length;
+  const totalWalletBalance = customers.reduce((sum: number, c: CustomerWithWallet) => sum + (c.wallet?.wallet_balance || 0), 0);
+  const activeWallets = customers.filter((c: CustomerWithWallet) => c.wallet?.status === 'Active').length;
+  const customersWithoutCard = customers.filter((c: CustomerWithWallet) => !c.wallet?.card_uid || c.wallet.card_uid.trim() === '' || c.wallet.card_uid === 'null');
 
   if (loading) {
     return (
@@ -657,7 +612,7 @@ export default function CustomersPage() {
             </span>
           </div>
           <div style={styles.alertList}>
-            {customersWithoutCard.slice(0, 5).map((c) => (
+            {customersWithoutCard.slice(0, 5).map((c: CustomerWithWallet) => (
               <span key={c.name} style={styles.alertTag}>
                 {c.customer_name || c.name}
               </span>
@@ -734,7 +689,7 @@ export default function CustomersPage() {
                 </tr>
               </thead>
               <tbody>
-                {filteredCustomers.map((customer, index) => {
+                {filteredCustomers.map((customer: CustomerWithWallet, index: number) => {
                   const hasCard = customer.wallet?.card_uid && customer.wallet.card_uid.trim() !== '' && customer.wallet.card_uid !== 'null';
                   const cardUidDisplay = customer.wallet?.card_uid || '-';
                   const shortCardUid = cardUidDisplay !== '-' && cardUidDisplay.length > 12
@@ -1088,8 +1043,6 @@ export default function CustomersPage() {
     </div>
   );
 }
-
-// app/customers/page.tsx - Updated Styles Section
 
 const styles: any = {
   container: {
@@ -1655,7 +1608,7 @@ const styles: any = {
   },
 };
 
-// Update the CSS styles for input focus and hover
+// Add styles to document
 if (typeof document !== 'undefined') {
   const style = document.createElement('style');
   style.textContent = `
@@ -1676,38 +1629,27 @@ if (typeof document !== 'undefined') {
       background-color: #f0f0f0 !important;
       transition: background-color 0.2s ease;
     }
-    
-    /* Input focus styles */
     input:focus, select:focus, textarea:focus {
       border-color: #667eea !important;
       box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15) !important;
       outline: none !important;
     }
-    
-    /* Input hover styles */
     input:hover:not(:focus), select:hover:not(:focus), textarea:hover:not(:focus) {
       border-color: #667eea !important;
     }
-    
-    /* Input placeholder styles */
     input::placeholder, textarea::placeholder {
       color: #94a3b8;
       opacity: 1;
     }
-    
-    /* Input disabled styles */
     input:disabled, select:disabled, textarea:disabled {
       background-color: #f1f5f9 !important;
       color: #64748b !important;
       cursor: not-allowed !important;
       opacity: 0.7 !important;
     }
-    
-    /* Dark mode input background for better visibility */
     input, select, textarea {
       background-color: #ffffff !important;
     }
-    
     .cancel-button:hover {
       background-color: #e5e7eb;
       border-color: #9ca3af;
@@ -1716,10 +1658,6 @@ if (typeof document !== 'undefined') {
       background-color: #5a67d8;
       transform: translateY(-2px);
       box-shadow: 0 4px 10px rgba(102, 126, 234, 0.3);
-    }
-    .email-link:hover, .phone-link:hover {
-      color: #5a67d8 !important;
-      text-decoration: underline !important;
     }
     .assign-button:hover {
       background-color: #5a67d8;
